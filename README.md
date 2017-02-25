@@ -11,13 +11,16 @@ Import the `pysqream.py` file into your own codebase::
         import atexit
         from datetime import date, datetime
         
+        sc = sq.connector() # Create new connection instance
         
-        sc = sq.connector()
-        atexit.register(sc.close)
+        atexit.register(sc.close) # Optional but recommended - close connection upon exit
+        
         sc.connect(host='<ip>', database='<database>', user='<username>', password='<password>',
                     port=<server port>, clustered=<True/False - based on your installation>, timeout=<socket timeout>)
-        qr = sc.query("SELECT x,y FROM t")
-        print(sc.cols_names())
-        print(sc.cols_types())
-        print(sc.cols_to_rows())
+                    
+        qr = sc.query("SELECT x,y FROM t") # Run query and get results
+        print(sc.cols_names()) # Print column names
+        print(sc.cols_types()) # Print column types
+        print(sc.cols_to_rows()) # Print results, as a list of tuples
+        sc.close() # Close connection
 
