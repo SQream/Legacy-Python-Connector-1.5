@@ -254,7 +254,7 @@ class SqreamConn(object):
         return ind
 
     def bytes2vals(self, col_type, column_data):
-        if col_type is not "ftVarchar":
+        if col_type != "ftVarchar":
             column_data = list(map(lambda c: conv_data_type(col_type, c), column_data))
         else:
             column_data = list(map(lambda c: c.replace(b'\x00', b''), column_data))
@@ -286,13 +286,13 @@ class SqreamConn(object):
     def socket_recv(self, param):
         try:
             data_recv = self._socket.recv(param)
-            if b'{"error"' in data_recv:
-                raise RuntimeError("Error from SQream: " + repr(data_recv))
             # TCP says recv will only read 'up to' param bytes, so keep filling buffer
             remainder = param - len(data_recv)
             while remainder > 0:
                 data_recv += self._socket.recv(remainder)
                 remainder = param - len(data_recv)
+            if b'{"error"' in data_recv:
+                raise RuntimeError("Error from SQream: " + repr(data_recv))
         except socket.error as err:
             self.close_connection()
             self.set_socket(None)
@@ -315,7 +315,7 @@ class SqreamConn(object):
         if close is False:
             data_recv = self.socket_recv(self.HEADER_LEN)
             ver_num = unpack('b', bytearray([data_recv[0]]))[0]
-            if ver_num is not PROTOCOL_VERSION:
+            if ver_num != PROTOCOL_VERSION:
                 raise RuntimeError(
                     "SQream protocol version mismatch. Expecting " + str(PROTOCOL_VERSION) + ", but got " + str(
                         ver_num) + ". Is this a newer/older SQream server?")
@@ -542,13 +542,3 @@ class connector(object):
             raise RuntimeError("Last query did not return a result")
         cursor = self.cols_data(cols)
         return list(map(tuple, zip(*cursor)))
-
-
-if __name__ == "__main__":
-    sc = connector()
-    atexit.register(sc.close)
-    sc.connect(host='192.168.0.186', database='faa', user='sqream', password='sqream', port=5000, timeout=15)
-    qr = sc.query("""SELECT Month, SUM(Cancelled) AS Cancelled FROM ontime WHERE "CancellationCode"='B' GROUP BY Month""")
-    print(sc.cols_names())
-    print(sc.cols_types())
-    print(sc.cols_to_rows())
