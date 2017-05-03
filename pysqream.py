@@ -12,8 +12,8 @@ Usage example:
         import pysqream as sq
         import atexit
         from datetime import date, datetime
-        
-        
+
+
         sc = sq.connector()
         atexit.register(sc.close)
         sc.connect(host='<ip>', database='<database>', user='<username>', password='<password>',
@@ -27,8 +27,6 @@ Usage example:
 .. _Python2/3 connector for SQream DB - GitHub:
 https://github.com/SQream/sqream-connector-python
 """
-
-
 
 import socket
 from struct import pack, unpack
@@ -48,6 +46,7 @@ DEFAULT_NETWORK_CHUNKSIZE = 10000
 Conversion methods from SQream protocol to Python
 """
 
+
 # 4b int to Date
 def int_to_date(d):
     y = int((10000 * d + 14780) // 3652425)
@@ -61,10 +60,11 @@ def int_to_date(d):
     dd = int((ddd - (mi * 306 + 5) // 10 + 1))
     return date(yyyy, mm, dd)
 
+
 # 8b int to Timestamp
 def long_to_datetime(dts):
-    u = (dts >> 32) & 0xffff
-    l = dts & 0xffff
+    u = (dts >> 32)
+    l = dts & 0xffffffff
     d = int_to_date(u)
     msec = int(l) % 1000
     l //= 1000
@@ -73,7 +73,8 @@ def long_to_datetime(dts):
     min = l % 60
     l //= 60
     hour = int(l)
-    return datetime(d.year, d.month, d.day, )
+    return datetime(d.year, d.month, d.day, hour, min, sec, msec)
+
 
 # Conversion helper to deal with dates
 def conv_data_type(type, data):
@@ -253,14 +254,13 @@ class SqreamConn(object):
             ind.append(idx)
         return ind
 
-    def bytes2vals(self, col_type, column_data):
-        if col_type is not "ftVarchar":
-            column_data = list(map(lambda c: conv_data_type(col_type, c), column_data))
+    def bytes2val(self, col_type, column_data_row):
+        if col_type != "ftVarchar":
+            column_data_row = conv_data_type(col_type, column_data_row)
         else:
-            column_data = list(map(lambda c: c.replace(b'\x00', b''), column_data))
-            assert isinstance(column_data, list)
-            column_data = list(map(lambda x: x.rstrip(), column_data))
-        return column_data
+            column_data_row = column_data_row.replace(b'\x00', b'')
+            column_data_row = column_data_row.rstrip()
+        return column_data_row
 
     def readcolumnbytes(self, column_bytes):
         chunks = []
@@ -286,13 +286,13 @@ class SqreamConn(object):
     def socket_recv(self, param):
         try:
             data_recv = self._socket.recv(param)
-            if b'{"error"' in data_recv:
-                raise RuntimeError("Error from SQream: " + repr(data_recv))
             # TCP says recv will only read 'up to' param bytes, so keep filling buffer
             remainder = param - len(data_recv)
             while remainder > 0:
                 data_recv += self._socket.recv(remainder)
                 remainder = param - len(data_recv)
+            if b'{"error"' in data_recv:
+                raise RuntimeError("Error from SQream: " + repr(data_recv))
         except socket.error as err:
             self.close_connection()
             self.set_socket(None)
@@ -315,7 +315,7 @@ class SqreamConn(object):
         if close is False:
             data_recv = self.socket_recv(self.HEADER_LEN)
             ver_num = unpack('b', bytearray([data_recv[0]]))[0]
-            if ver_num is not PROTOCOL_VERSION:
+            if ver_num != PROTOCOL_VERSION:
                 raise RuntimeError(
                     "SQream protocol version mismatch. Expecting " + str(PROTOCOL_VERSION) + ", but got " + str(
                         ver_num) + ". Is this a newer/older SQream server?")
@@ -352,9 +352,10 @@ class SqreamConn(object):
         self.connect_unclustered(database, username, password)
 
     def connect_unclustered(self, database, username, password):
-        cmd_str = """{{"connectDatabase":"{0}","password":"{1}","username":"{2}"}}""".format(database.replace('"', '\\"')
-                                                                                             ,password.replace('"', '\\"')
-                                                                                             ,username.replace('"', '\\"'))
+        cmd_str = """{{"connectDatabase":"{0}","password":"{1}","username":"{2}"}}""".format(
+            database.replace('"', '\\"')
+            , password.replace('"', '\\"')
+            , username.replace('"', '\\"'))
         self.exchange(cmd_str)
 
     def execute(self, query_str):
@@ -362,7 +363,8 @@ class SqreamConn(object):
         query_data = list()
 
         query_str = query_str.replace('\n', ' ').replace('\r', '')
-        cmd_str = """{{"prepareStatement":"{0}","chunkSize":{1}}}""".format(query_str.replace('"', '\\"'),str(DEFAULT_NETWORK_CHUNKSIZE))
+        cmd_str = """{{"prepareStatement":"{0}","chunkSize":{1}}}""".format(query_str.replace('"', '\\"'),
+                                                                            str(DEFAULT_NETWORK_CHUNKSIZE))
         res1 = self.exchange(cmd_str)
 
         cmd_str = '{"queryTypeOut" : "queryTypeOut"}'
@@ -415,17 +417,15 @@ class SqreamConn(object):
                         column_data = self.readcolumnbytes(col_data.get_column_size()[0])  # , col_data.get_type_size())
                         column_data = [column_data[i:i + col_data.get_type_size()] for i in
                                        range(0, col_data.get_column_size()[0], col_data.get_type_size())]
-                        column_data = self.bytes2vals(col_data.get_type_name(), column_data)
+                        column_data = list(map(lambda c: self.bytes2val(col_data.get_type_name(), c), column_data))
 
                     elif col_data.get_isTrueVarChar() == False and col_data.get_nullable() == True:
                         column_data = self.readcolumnbytes(col_data.get_column_size()[0])
-                        is_null = map(lambda c: unpack('b', bytes([c]))[0], column_data)
-                        column_data = self.readcolumnbytes(
-                            col_data.get_column_size()[1])  # ,col_data.get_type_size(), None, is_null)
+                        is_null = map(lambda c: unpack('b', bytes(c))[0], column_data)
+                        column_data = self.readcolumnbytes(col_data.get_column_size()[1])  # ,col_data.get_type_size(), None, is_null)
                         column_data = [column_data[i:i + col_data.get_type_size()] for i in
                                        range(0, col_data.get_column_size()[1], col_data.get_type_size())]
-                        column_data = self.bytes2vals(col_data.get_type_name(), column_data)
-                        column_data = [column_data[idx] if elem == 0 else u"\\N" for idx, elem in enumerate(is_null)]
+                        column_data = [self.bytes2val(col_data.get_type_name(),column_data[idx]) if elem == 0 else u"\\N" for idx, elem in enumerate(is_null)]
 
                     elif col_data.get_isTrueVarChar() == True and col_data.get_nullable() == False:
                         column_data = self.readcolumnbytes(col_data.get_column_size()[0])
@@ -438,7 +438,7 @@ class SqreamConn(object):
 
                     elif col_data.get_isTrueVarChar() == True and col_data.get_nullable() == True:
                         column_data = self.readcolumnbytes(col_data.get_column_size()[0])
-                        is_null = map(lambda c: unpack('b', bytes([c]))[0], column_data)
+                        is_null = map(lambda c: unpack('b', bytes(c))[0], column_data)
                         column_data = self.readcolumnbytes(col_data.get_column_size()[1])
                         column_data = [column_data[i:i + 4] for i in range(0, col_data.get_column_size()[1], 4)]
                         nvarchar_lens = map(lambda c: unpack('i', c)[0], column_data)
@@ -542,13 +542,3 @@ class connector(object):
             raise RuntimeError("Last query did not return a result")
         cursor = self.cols_data(cols)
         return list(map(tuple, zip(*cursor)))
-
-
-if __name__ == "__main__":
-    sc = connector()
-    atexit.register(sc.close)
-    sc.connect(host='192.168.0.186', database='faa', user='sqream', password='sqream', port=5000, timeout=15)
-    qr = sc.query("""SELECT Month, SUM(Cancelled) AS Cancelled FROM ontime WHERE "CancellationCode"='B' GROUP BY Month""")
-    print(sc.cols_names())
-    print(sc.cols_types())
-    print(sc.cols_to_rows())
