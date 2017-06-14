@@ -492,6 +492,7 @@ class connector(object):
             return
         else:
             self._sc.close_socket()
+            self._sc = None
 
     def query(self, query=None):
         if query is None:
