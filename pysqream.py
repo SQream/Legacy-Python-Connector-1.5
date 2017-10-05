@@ -337,7 +337,7 @@ class SqreamConn(object):
         if read_len > 15 or read_len < 7:
             raise RuntimeError("Clustered connection requires a length of between 7 and 15, but I got " + str(
                 read_len) + ". Perhaps this connection should be unclustered?")
-        # Read the number of bytes, which is the IP in string format (WHY?????????)
+        # Read the number of bytes, which is the IP in string format
         ip_addr = self.socket_recv(read_len)
         # Now read port
         port_raw = self.socket_recv(4)
@@ -543,4 +543,14 @@ class connector(object):
             raise RuntimeError("Last query did not return a result")
         cursor = self.cols_data(cols)
         return list(map(tuple, zip(*cursor)))
-    
+
+
+    def cols_to_rows2(self, cols=None):
+        # Transpose the columns into rows
+        if cols == None:
+            cols = self._cols
+        if cols == None:
+            raise RuntimeError("Last query did not return a result")
+        cursor = self.cols_data(cols)
+        # cursor = list(map(lambda c: c.get_column_data(), cols))
+        return zip(*(col.get_column_data() for col in cols))
