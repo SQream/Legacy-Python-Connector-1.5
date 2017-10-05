@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 Python2/3 connector for SQream DB
 
 This is a pre-alpha connector. It has not been thoroughly tested,
-but should work with SQream v1.12
+but should work with SQream v1.12 onwards
 
 Usage example:
     Import the `pysqream.py` file into your own codebase::
@@ -307,6 +307,7 @@ class SqreamConn(object):
         # If close=True, then do not expect to read anything back
         cmd_bytes = self.cmd2bytes(cmd_str)
         try:
+            self._socket.settimeout(None)
             self._socket.send(cmd_bytes)
         except socket.error as err:
             self.close_connection()
@@ -360,13 +361,13 @@ class SqreamConn(object):
 
     def execute(self, query_str):
         err = []
+
         query_data = list()
 
         query_str = query_str.replace('\n', ' ').replace('\r', '')
         cmd_str = """{{"prepareStatement":"{0}","chunkSize":{1}}}""".format(query_str.replace('"', '\\"'),
                                                                             str(DEFAULT_NETWORK_CHUNKSIZE))
         res1 = self.exchange(cmd_str)
-
         cmd_str = '{"queryTypeOut" : "queryTypeOut"}'
         query_type_out = self.exchange(cmd_str)
         query_type_out = json.loads(query_type_out.decode("utf-8"))
