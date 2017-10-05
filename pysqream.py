@@ -543,3 +543,4 @@ class connector(object):
             raise RuntimeError("Last query did not return a result")
         cursor = self.cols_data(cols)
         return list(map(tuple, zip(*cursor)))
+    
