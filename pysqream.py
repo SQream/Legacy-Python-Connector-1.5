@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 Python2/3 connector for SQream DB
 
 This is a pre-alpha connector. It has not been thoroughly tested,
-but should work with SQream v1.12 onwards
+but should work with SQream v1.12
 
 Usage example:
     Import the `pysqream.py` file into your own codebase::
@@ -41,6 +41,10 @@ DEFAULT_HOSTNAME = "127.0.0.1"
 DEFAULT_SQREAM_PORT = 5000
 DEFAULT_BUFFER_SIZE = 4096
 DEFAULT_NETWORK_CHUNKSIZE = 10000
+
+VER = sys.version_info
+MAJOR = VER[0]
+
 
 """
 Conversion methods from SQream protocol to Python
@@ -165,6 +169,7 @@ class SqreamColumn(object):
 
 class SqreamConn(object):
     def __init__(self, username=None, password=None, database=None, host=None, port=None, clustered=False, timeout=15):
+        self.get_nulls = self.get_nulls2 if MAJOR==2 else self.get_nulls3
         self._socket = None
         self._user = username
         self._password = password
@@ -358,16 +363,24 @@ class SqreamConn(object):
             , password.replace('"', '\\"')
             , username.replace('"', '\\"'))
         self.exchange(cmd_str)
+    #the "get_nulls" function are for python2/3 compatability for reading bytes
+    def get_nulls2(self,column_data):
+          return map(lambda c: unpack('b', bytes(c))[0], column_data)
+          # or return [ord(c) for c in column_data]
+
+    def get_nulls3(self,column_data):
+       return [c for c in column_data]
+
 
     def execute(self, query_str):
         err = []
-
         query_data = list()
 
         query_str = query_str.replace('\n', ' ').replace('\r', '')
         cmd_str = """{{"prepareStatement":"{0}","chunkSize":{1}}}""".format(query_str.replace('"', '\\"'),
                                                                             str(DEFAULT_NETWORK_CHUNKSIZE))
         res1 = self.exchange(cmd_str)
+
         cmd_str = '{"queryTypeOut" : "queryTypeOut"}'
         query_type_out = self.exchange(cmd_str)
         query_type_out = json.loads(query_type_out.decode("utf-8"))
@@ -422,7 +435,7 @@ class SqreamConn(object):
 
                     elif col_data.get_isTrueVarChar() == False and col_data.get_nullable() == True:
                         column_data = self.readcolumnbytes(col_data.get_column_size()[0])
-                        is_null = map(lambda c: unpack('b', bytes(c))[0], column_data)
+                        is_null = self.get_nulls(column_data)
                         column_data = self.readcolumnbytes(col_data.get_column_size()[1])  # ,col_data.get_type_size(), None, is_null)
                         column_data = [column_data[i:i + col_data.get_type_size()] for i in
                                        range(0, col_data.get_column_size()[1], col_data.get_type_size())]
@@ -439,7 +452,7 @@ class SqreamConn(object):
 
                     elif col_data.get_isTrueVarChar() == True and col_data.get_nullable() == True:
                         column_data = self.readcolumnbytes(col_data.get_column_size()[0])
-                        is_null = map(lambda c: unpack('b', bytes(c))[0], column_data)
+                        is_null = self.get_nulls(column_data)
                         column_data = self.readcolumnbytes(col_data.get_column_size()[1])
                         column_data = [column_data[i:i + 4] for i in range(0, col_data.get_column_size()[1], 4)]
                         nvarchar_lens = map(lambda c: unpack('i', c)[0], column_data)
@@ -535,6 +548,13 @@ class connector(object):
         if cols == None:
             raise RuntimeError("Last query did not return a result")
         return list(map(lambda c: c.get_type_name(), cols))
+
+    def cols_nullable(self, cols=None):
+        if cols == None:
+            cols = self._cols
+        if cols == None:
+            raise RuntimeError("Last query did not return a result")
+        return list(map(lambda c: c.get_nullable(), cols))
 
     def cols_to_rows(self, cols=None):
         # Transpose the columns into rows
