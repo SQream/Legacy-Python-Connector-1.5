@@ -14,7 +14,7 @@ Usage example:
         from datetime import date, datetime
 
 
-        sc = sq.connector()
+        sc = sq.Connector()
         atexit.register(sc.close)
         sc.connect(host='<ip>', database='<database>', user='<username>', password='<password>',
                     port=<server port>, clustered=<true/false - based on your installation>, timeout=<socket timeout>)
@@ -467,7 +467,7 @@ class SqreamConn(object):
 
 
 # This class should be used to create a connection
-class connector(object):
+class Connector(object):
     def __init__(self):
         # Store the connection
         self._sc = None
@@ -575,3 +575,7 @@ class connector(object):
         cursor = self.cols_data(cols)
         # cursor = list(map(lambda c: c.get_column_data(), cols))
         return zip(*(col.get_column_data() for col in cols))
+
+    
+# For backwards compatibility, remove eventually    
+connector = Connector   
