@@ -12,7 +12,7 @@ import pysqream as sq
 import atexit
 from datetime import date, datetime
 
-sc = sq.connector() # Create new connection instance
+sc = sq.Connector() # Create new connection instance
 
 atexit.register(sc.close) # Optional but recommended - close connection upon exit
 
