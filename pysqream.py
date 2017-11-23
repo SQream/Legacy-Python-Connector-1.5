@@ -254,7 +254,18 @@ class SqreamConn(object):
             raise RuntimeError("Error from SQream: " + str(err))
         except:
             raise RuntimeError("Other error")
+    
+    ''' SSL interlude : 
+        ssl.wrap_socket(), ssl.get_server_certificate(addr, ssl_version=PROTOCOL_SSLv23, ca_certs=None)
+    '''
 
+    def cloak_socket(self, sock = None):
+        ''' Wrap a socket to make it an SSL socket'''      
+        try:
+            self._socket = ssl.wrap_socket(sock or self._socket, ssl_version=ssl.PROTOCOL_TLSv1, ciphers="ADH-AES256-SHA")
+        except:
+            print ("Error wrapping socket")
+    
     def close_socket(self):
         if self._socket:
             try:
