@@ -1,10 +1,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 """
-Python2/3 connector for SQream DB
+Python 2.7/3.3+ connector for SQream DB
 
-This is a pre-alpha connector. It has not been thoroughly tested,
-but should work with SQream v1.12
+Tested on SQream protocols 4 and 5
 
 Usage example:
     Import the `pysqream.py` file into your own codebase::
@@ -28,23 +27,66 @@ Usage example:
 https://github.com/SQream/sqream-connector-python
 """
 
-import socket
+import sys, socket, ssl, json, atexit, array
 from struct import pack, unpack
-import json
-import atexit
 from datetime import date, datetime
-import sys
+from time import gmtime
+from itertools import groupby
+
+from threading import Event
+try: #Py2
+    import thread
+    from Queue import Queue, Empty, Full
+except: # Py3
+    import _thread as thread
+    from queue import Queue, Empty, Full
+
+try:
+    #If numpy is installed, allows much faster conversion of datetime longs to python objects
+    import numpy as np  
+except:
+    NP = False
+else:
+    from numpy import ma
+    NP = True
 
 # Defaults constants
-PROTOCOL_VERSION = 4
+PROTOCOL_VERSION = 4           # <==== Update to 5 here if using a new SQream version
 DEFAULT_HOSTNAME = "127.0.0.1"
 DEFAULT_SQREAM_PORT = 5000
+SQL_SQREAM_PORT = 5100
 DEFAULT_BUFFER_SIZE = 4096
 DEFAULT_NETWORK_CHUNKSIZE = 10000
+FLUSH_SIZE = 65536     # Default flush size for set() operations
 
 VER = sys.version_info
 MAJOR = VER[0]
 
+
+column_codes_for_array =    {'ftBool': 'B',   
+                            'ftUByte': 'b',
+                             'ftShort': 'h',
+                            'ftInt': 'i',  
+                            'ftLong': 'q',
+                            'ftFloat': 'f',                 
+                            'ftDouble': 'd',
+                            'ftDate': 'i',
+                            'ftDateTime': 'q',
+                            'ftVarchar': None,
+                            'ftBlob':    None
+                            }
+
+sqream_typenames_to_codes = { 'BOOLEAN':  'ftBool', 
+                            'INT':      'ftInt', 
+                            'BIGINT':   'ftLong', 
+                            'FLOAT':    'ftDouble',
+                            'REAL':     'ftFloat',
+                            'DATE':     'ftDate',
+                            'DATETIME': 'ftDateTime',
+                            'TIMESTAMP':'ftDateTime',
+                            'VARCHAR':  'ftVarchar',
+                            'NVARCHAR': 'ftBlob'
+                            }    
 
 """
 Conversion methods from SQream protocol to Python
@@ -313,7 +355,7 @@ class SqreamConn(object):
         cmd_bytes = self.cmd2bytes(cmd_str)
         try:
             self._socket.settimeout(None)
-            self._socket.send(cmd_bytes)
+            self._socket.sendall(cmd_bytes)
         except socket.error as err:
             self.close_connection()
             self.set_socket(None)
@@ -321,7 +363,7 @@ class SqreamConn(object):
         if close is False:
             data_recv = self.socket_recv(self.HEADER_LEN)
             ver_num = unpack('b', bytearray([data_recv[0]]))[0]
-            if ver_num != PROTOCOL_VERSION:
+            if ver_num != PROTOCOL_VERSION:   #if ver_num not in (4,5):   # Expecting 4 or 5
                 raise RuntimeError(
                     "SQream protocol version mismatch. Expecting " + str(PROTOCOL_VERSION) + ", but got " + str(
                         ver_num) + ". Is this a newer/older SQream server?")
@@ -375,10 +417,17 @@ class SqreamConn(object):
     def execute(self, query_str):
         err = []
         query_data = list()
-
+        
+        if PROTOCOL_VERSION == 5:    # remove if clause once everyone's on 5
+            # getStatementId is new for SQream protocol version 5
+            cmd_str = '{"getStatementId" : "getStatementId"}'
+            res_id = self.exchange(cmd_str)
+            
         query_str = query_str.replace('\n', ' ').replace('\r', '')
         cmd_str = """{{"prepareStatement":"{0}","chunkSize":{1}}}""".format(query_str.replace('"', '\\"'),
                                                                             str(DEFAULT_NETWORK_CHUNKSIZE))
+        
+        # res1 is different between protocol 4 and 5 - ver. 4 returns Id, 5 doesn't
         res1 = self.exchange(cmd_str)
 
         cmd_str = '{"queryTypeOut" : "queryTypeOut"}'
