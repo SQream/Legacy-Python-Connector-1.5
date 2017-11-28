@@ -1,7 +1,6 @@
-# Python2/3 connector for SQream DB
+# Python2.7/3.3+ connector for SQream DB
 
-WARNING: This is a pre-alpha connector. It has not been thoroughly tested,
-but should work with SQream DB v1.12
+Tested on SQream protocols 4 and 5
 
 Usage example:
 
