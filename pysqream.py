@@ -333,12 +333,21 @@ class SqreamConn(object):
         return column_data
 
     @staticmethod
-    def cmd2bytes(cmd_str):
-        cmd_bytes_1 = bytearray([2])
-        cmd_bytes_2 = bytearray([1])
-        cmd_bytes_4 = cmd_str.encode('ascii')
+    def cmd2bytes(cmd_str, binary = False):
+        ''' Packing command string to bytes and adding 10 bit header '''
+        
+        cmd_bytes_1 = bytearray([2])                 # Protocol version
+        
+        if not binary:
+            cmd_bytes_2 = bytearray([1])             # Vote 1 for text
+            cmd_bytes_4 = cmd_str.encode('ascii')
+        else:
+            cmd_bytes_2 = bytearray([2])             # 2 for binary
+            cmd_bytes_4 = cmd_str
+            
         cmd_bytes_3 = pack('q', len(cmd_bytes_4))
         cmd_bytes = cmd_bytes_1 + cmd_bytes_2 + cmd_bytes_3 + cmd_bytes_4
+        
         return cmd_bytes
 
     def socket_recv(self, param):
@@ -361,9 +370,9 @@ class SqreamConn(object):
             raise RuntimeError("Other error while receiving from socket")
         return data_recv
 
-    def exchange(self, cmd_str, close=False):
+    def exchange(self, cmd_str, close=False, binary = False):
         # If close=True, then do not expect to read anything back
-        cmd_bytes = self.cmd2bytes(cmd_str)
+        cmd_bytes = self.cmd2bytes(cmd_str, binary)
         try:
             self._socket.settimeout(None)
             self._socket.sendall(cmd_bytes)
