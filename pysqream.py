@@ -64,7 +64,7 @@ MAJOR = VER[0]
 
 
 column_codes_for_array =    {'ftBool': 'B',   
-                            'ftUByte': 'b',
+                            'ftUByte': 'B',
                              'ftShort': 'h',
                             'ftInt': 'i',  
                             'ftLong': 'q',
@@ -77,6 +77,8 @@ column_codes_for_array =    {'ftBool': 'B',
                             }
 
 sqream_typenames_to_codes = { 'BOOLEAN':  'ftBool', 
+                            'TINYINT':  'ftUByte',
+                            'SMALLINT': 'ftShort',
                             'INT':      'ftInt', 
                             'BIGINT':   'ftLong', 
                             'FLOAT':    'ftDouble',
@@ -126,7 +128,7 @@ def long_to_datetime(dts):
 def conv_data_type(type, data):
     # Type conversions for unpack
     typeconversion = {"ftInt": "i",
-                      "ftUByte": "b",
+                      "ftUByte": "B",
                       "ftShort": "h",
                       "ftLong": "q",
                       "ftFloat": "f",
@@ -383,7 +385,7 @@ class SqreamConn(object):
         if close is False:
             data_recv = self.socket_recv(self.HEADER_LEN)
             ver_num = unpack('b', bytearray([data_recv[0]]))[0]
-            if ver_num != PROTOCOL_VERSION:   #if ver_num not in (4,5):   # Expecting 4 or 5
+            if ver_num not in (4,5):   # Expecting 4 or 5  # if ver_num != PROTOCOL_VERSION: 
                 raise RuntimeError(
                     "SQream protocol version mismatch. Expecting " + str(PROTOCOL_VERSION) + ", but got " + str(
                         ver_num) + ". Is this a newer/older SQream server?")
