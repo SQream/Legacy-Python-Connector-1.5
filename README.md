@@ -1,6 +1,7 @@
 # Python2.7/3.3+ connector for SQream DB
 
-This is a deprecated version. Please use the new version - 
+#### This is a deprecated version. Please use the new version - 
+
 https://github.com/SQream/SQream-Python-Connector
 
 Tested on SQream protocols 4 and 5
